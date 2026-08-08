@@ -1,0 +1,61 @@
+name: MongoDB watchdog
+
+on:
+  schedule:
+    # Every 15 minutes: open an issue when MongoDB is unreachable, close
+    # it again automatically once the DB recovers.
+    - cron: "*/15 * * * *"
+  workflow_dispatch:
+    inputs:
+      force:
+        description: "Run once now (opens/closes as needed)"
+        type: boolean
+        default: false
+
+jobs:
+  watch:
+    name: Check DB connectivity
+    runs-on: ubuntu-latest
+    permissions:
+      issues: write
+    steps:
+      - name: Query status endpoint
+        id: query
+        env:
+          URL: ${{ vars.KEEPALIVE_URL }}
+        run: |
+          if [ -z "$URL" ]; then
+            echo "KEEPALIVE_URL repo variable is not set; skipping."
+            exit 0
+          fi
+          BODY=$(curl -fsS --max-time 40 "$URL" || true)
+          DB=$(printf '%s' "$BODY" | jq -r '.db // "unknown"' 2>/dev/null || echo unknown)
+          echo "db=$DB" >> "$GITHUB_OUTPUT"
+
+      - name: Open alert when DB is unreachable
+        if: steps.query.outputs.db == 'unreachable'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          URL: ${{ vars.KEEPALIVE_URL }}
+        run: |
+          TITLE="MongoDB unreachable"
+          EXISTS=$(gh issue list --state open --limit 100 --json title -q ".[] | select(.title==\"$TITLE\") | length" | head -n1)
+          if [ -z "$EXISTS" ]; then
+            gh issue create --title "$TITLE" \
+              --body "The status endpoint at \`$URL\` reported the database as **unreachable** at $(date -u). Check [Atlas](https://cloud.mongodb.com) for a suspended cluster, or Render for connectivity."
+          else
+            echo "Alert already open; skipping."
+          fi
+
+      - name: Close alert once DB recovers
+        if: steps.query.outputs.db == 'connected'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          TITLE="MongoDB unreachable"
+          NUM=$(gh issue list --state open --limit 100 --json title,number -q ".[] | select(.title==\"$TITLE\") | .number" | head -n1)
+          if [ -n "$NUM" ]; then
+            gh issue close "$NUM" --reason completed --comment "DB reachable again — closed by MongoDB watchdog."
+          else
+            echo "No open alert; all clear."
+          fi
