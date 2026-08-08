@@ -1,7 +1,15 @@
 import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
-import { deletePlaylist, getPlaylists, uploadCsv, uploadSongFiles } from "../api/client";
 import {
+  createPlaylist as apiCreatePlaylist,
+  deletePlaylist,
+  deleteTracks as apiDeleteTracks,
+  getPlaylists,
+  uploadCsv,
+  uploadSongFiles,
+} from "../api/client";
+import {
+  deleteIndexedDBTracks,
   getAllIndexedDBTracks,
   getIndexedDBTrack,
   storeTrackInIndexedDB,
@@ -39,15 +47,15 @@ export function useLibrary() {
   const syncFromServer = useCallback(async () => {
     try {
       const serverPlaylists = await getPlaylists();
-      if (serverPlaylists.length > 0) {
-        setPlaylists(serverPlaylists);
-      }
+      setPlaylists((prev) =>
+        JSON.stringify(prev) === JSON.stringify(serverPlaylists) ? prev : serverPlaylists
+      );
       return serverPlaylists;
     } catch (e) {
       console.error("Server sync failed, using mock data:", e);
-      return playlists;
+      return [];
     }
-  }, [playlists]);
+  }, []);
 
   const loadIndexedDB = useCallback(async () => {
     setIsSyncingIDB(true);
@@ -72,6 +80,7 @@ export function useLibrary() {
     async (tracks, { auto = false } = {}) => {
       const pending = [];
       for (const t of tracks) {
+        if (!t || t.audio_url?.includes("samplelib.com")) continue;
         const existing = await getIndexedDBTrack(t.id);
         if (!existing?.blobData) pending.push(t);
       }
@@ -82,17 +91,29 @@ export function useLibrary() {
       setDownloadProgress({ done: 0, total: pending.length, current: pending[0].title });
 
       let ok = 0;
-      for (let i = 0; i < pending.length; i += 1) {
-        const t = pending[i];
-        setDownloadProgress({ done: i, total: pending.length, current: t.title });
-        try {
-          const blob = await fetchTrackAudio(t);
-          await storeTrackInIndexedDB({ ...t, file_size: formatBytes(blob.size) }, blob);
-          ok += 1;
-        } catch (err) {
-          console.error(`Failed to download "${t.title}":`, err);
+      const CONCURRENCY = 3;
+      let next = 0;
+      const worker = async () => {
+        while (next < pending.length) {
+          const i = next;
+          next += 1;
+          const t = pending[i];
+          setDownloadProgress({ done: i, total: pending.length, current: t.title });
+          try {
+            const blob = await fetchTrackAudio(t);
+            await storeTrackInIndexedDB(
+              { ...t, file_size: formatBytes(blob.size) },
+              blob
+            );
+            ok += 1;
+          } catch (err) {
+            console.error(`Failed to download "${t.title}":`, err);
+          }
         }
-      }
+      };
+      await Promise.all(
+        Array.from({ length: Math.min(CONCURRENCY, pending.length) }, () => worker())
+      );
       await refreshIDBStats();
       setDownloadProgress(null);
       if (ok > 0) {
@@ -107,6 +128,7 @@ export function useLibrary() {
 
   const cacheTrack = useCallback(
     async (track) => {
+      if (!track?.audio_url || track.audio_url.includes("samplelib.com")) return;
       try {
         const existing = await getIndexedDBTrack(track.id);
         if (existing?.blobData) {
@@ -142,8 +164,9 @@ export function useLibrary() {
         setPlaylists((prev) => [res, ...prev]);
         setActivePlaylistId(res.id);
         setUploadProgress(100);
-        toast.success(`Imported "${res.title}" (${res.tracks.length} tracks). Downloading audio…`);
-        await downloadTracks(res.tracks, { auto: true });
+        toast.success(
+          `Imported "${res.title}" (${res.tracks.length} tracks). Audio resolves when you play or download.`
+        );
       } catch (err) {
         const detail =
           err?.response?.status === 0 || err?.message?.includes("Network")
@@ -155,7 +178,7 @@ export function useLibrary() {
         setTimeout(() => setIsUploading(false), 500);
       }
     },
-    [downloadTracks]
+    []
   );
 
   const uploadSongs = useCallback(
@@ -200,6 +223,47 @@ export function useLibrary() {
     }
   }, [activePlaylistId]);
 
+  const createPlaylist = useCallback(
+    async (name) => {
+      if (!name || !name.trim()) {
+        toast.error("Enter a playlist name.");
+        return null;
+      }
+      try {
+        const res = await apiCreatePlaylist(name.trim());
+        await syncFromServer();
+        setActivePlaylistId(res.id);
+        toast.success(`Created playlist "${res.title}".`);
+        return res;
+      } catch (e) {
+        toast.error(`Could not create playlist: ${e?.message || "unknown error"}`);
+        console.error(e);
+        return null;
+      }
+    },
+    [syncFromServer]
+  );
+
+  const deleteTracks = useCallback(
+    async (trackIds) => {
+      if (!trackIds || trackIds.length === 0) return;
+      let serverDeleted = 0;
+      try {
+        const res = await apiDeleteTracks(trackIds);
+        serverDeleted = res?.deleted || 0;
+      } catch (e) {
+        console.error("Server track delete failed:", e);
+      }
+      await deleteIndexedDBTracks(trackIds);
+      await refreshIDBStats();
+      await syncFromServer();
+      toast.success(
+        `Deleted ${trackIds.length} track${trackIds.length > 1 ? "s" : ""} from library and storage.`
+      );
+    },
+    [refreshIDBStats, syncFromServer]
+  );
+
   return {
     playlists,
     activePlaylist,
@@ -215,6 +279,8 @@ export function useLibrary() {
     handleCsvUpload,
     uploadSongs,
     removePlaylist,
+    createPlaylist,
+    deleteTracks,
     cacheTrack,
     downloadTracks,
     refreshIDBStats,

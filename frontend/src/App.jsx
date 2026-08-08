@@ -16,7 +16,7 @@ export default function App() {
 
   const library = useLibrary();
   const player = usePlayer({ cacheTrack: library.cacheTrack });
-  const { apiKeys, addKey, copyKey } = useApiKeys();
+  const { apiKeys, addKey, copyKey, revokeKey } = useApiKeys();
 
   const cachedMap = Object.fromEntries(
     library.idbTracks.map((t) => [t.id, t])
@@ -31,6 +31,7 @@ export default function App() {
         activePlaylistId={library.activePlaylist?.id}
         setActivePlaylistId={library.setActivePlaylistId}
         idbTracks={library.idbTracks}
+        onCreatePlaylist={library.createPlaylist}
       />
 
       <main className="flex-1 p-6 pb-32 overflow-auto">
@@ -124,6 +125,7 @@ export default function App() {
                   isPlaying={player.isPlaying}
                   onPlay={player.playTrack}
                   cachedMap={cachedMap}
+                  onDeleteSelected={library.deleteTracks}
                 />
               </div>
             )}
@@ -137,6 +139,7 @@ export default function App() {
               apiKeys={apiKeys}
               copyKey={copyKey}
               onAdd={addKey}
+              onRevoke={revokeKey}
             />
           </section>
         )}
@@ -164,6 +167,7 @@ export default function App() {
               isPlaying={player.isPlaying}
               onPlay={player.playTrack}
               cachedMap={cachedMap}
+              onDeleteSelected={library.deleteTracks}
             />
           </section>
         )}

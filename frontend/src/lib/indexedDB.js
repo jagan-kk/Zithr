@@ -47,6 +47,22 @@ export const getAllIndexedDBTracks = async () => {
   }
 };
 
+export const deleteIndexedDBTracks = async (ids) => {
+  try {
+    const db = await openIndexedDB();
+    return new Promise((resolve) => {
+      const tx = db.transaction(STORE, "readwrite");
+      const store = tx.objectStore(STORE);
+      ids.forEach((id) => store.delete(id));
+      tx.oncomplete = () => resolve(true);
+      tx.onerror = () => resolve(false);
+    });
+  } catch (e) {
+    console.error("IndexedDB delete error:", e);
+    return false;
+  }
+};
+
 export const getIndexedDBTrack = async (id) => {
   try {
     const db = await openIndexedDB();

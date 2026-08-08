@@ -1,4 +1,5 @@
 import { useCallback, useRef, useState } from "react";
+import { toast } from "sonner";
 
 export function usePlayer({ cacheTrack }) {
   const audioRef = useRef(null);
@@ -12,11 +13,15 @@ export function usePlayer({ cacheTrack }) {
 
   const playTrack = useCallback(
     async (track, tracks = []) => {
+      const hasAudio = Boolean(track?.audio_url || track?.file_id);
       setCurrentTrack(track);
       setQueue(tracks);
       setQueueIndex(tracks.findIndex((t) => t.id === track.id));
       setIsPlaying(true);
-      if (cacheTrack) cacheTrack(track);
+      if (cacheTrack && hasAudio) cacheTrack(track);
+      if (!hasAudio) {
+        toast.info(`No audio source for "${track?.title}".`);
+      }
       setTimeout(() => {
         if (!audioRef.current) return;
         audioRef.current.currentTime = 0;

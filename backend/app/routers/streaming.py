@@ -1,11 +1,18 @@
+import asyncio
+import logging
+
 from bson import ObjectId
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import StreamingResponse
 import httpx
 
+from app.core.auth import require_api_key
 from app.core.database import fs_bucket, fs_files_col, playlists_col
+from app.services.archive_resolver import resolve as resolve_archive
 
-router = APIRouter(prefix="/stream", tags=["streaming"])
+logger = logging.getLogger(__name__)
+
+router = APIRouter(prefix="/stream", tags=["streaming"], dependencies=[Depends(require_api_key)])
 
 PASS_THROUGH_HEADERS = {"content-range", "content-length", "accept-ranges", "content-type"}
 CHUNK_SIZE = 256 * 1024
@@ -14,14 +21,51 @@ CHUNK_SIZE = 256 * 1024
 # so the stream isn't truncated when the request would otherwise close.
 _client = httpx.AsyncClient(timeout=httpx.Timeout(120.0, connect=10.0), follow_redirects=True)
 
+# In-memory lazy-resolution cache: track_id -> audio_url ("" = negative).
+_lazy_cache: dict = {}
+_lazy_inflight: set = set()
 
-async def find_track(track_id: str) -> dict | None:
-    cursor = playlists_col.find({}, {"_id": 0, "tracks": 1})
+
+async def find_track(track_id: str) -> tuple[dict | None, int | None, dict | None]:
+    cursor = playlists_col.find({})
     async for playlist in cursor:
-        for track in playlist.get("tracks", []):
+        tracks = playlist.get("tracks", [])
+        for i, track in enumerate(tracks):
             if track.get("id") == track_id:
-                return track
-    return None
+                return playlist, i, track
+    return None, None, None
+
+
+async def _lazy_resolve(playlist: dict, idx: int, track: dict) -> str:
+    """Resolve a pending track to a real audio URL on demand, caching the result."""
+    track_id = track.get("id")
+    if track_id in _lazy_cache:
+        return _lazy_cache[track_id] or ""
+
+    while track_id in _lazy_inflight:
+        await asyncio.sleep(0.2)
+    if track_id in _lazy_cache:
+        return _lazy_cache[track_id] or ""
+
+    _lazy_inflight.add(track_id)
+    try:
+        result = await resolve_archive(track.get("title", ""), track.get("artist", ""))
+    finally:
+        _lazy_inflight.discard(track_id)
+
+    url = result["audio_url"] if result else ""
+    _lazy_cache[track_id] = url
+    if url:
+        track["audio_url"] = url
+        track["resolved_source"] = result.get("resolved_source", "Internet Archive")
+        if result.get("duration"):
+            track["duration"] = result["duration"]
+        track["status"] = "cached"
+        await playlists_col.update_one(
+            {"_id": playlist["_id"]},
+            {"$set": {f"tracks.{idx}": track}},
+        )
+    return url
 
 
 async def grid_stream(file_obj: ObjectId, start: int, end_excl: int):
@@ -35,13 +79,6 @@ async def grid_stream(file_obj: ObjectId, start: int, end_excl: int):
             break
         remaining -= len(chunk)
         yield chunk
-
-
-async def remote_stream(request) -> None:
-    """Yield upstream remote audio bytes while keeping the client connection open."""
-    async with _client.stream("GET", request.url, headers=request.headers) as upstream:
-        async for chunk in upstream.aiter_bytes():
-            yield chunk
 
 
 @router.get("/file/{file_id}")
@@ -85,7 +122,7 @@ async def serve_uploaded_file(file_id: str, request: Request):
 
 @router.get("/proxy/{track_id}")
 async def stream_proxy(track_id: str, request: Request):
-    track = await find_track(track_id)
+    playlist, idx, track = await find_track(track_id)
     if not track:
         raise HTTPException(status_code=404, detail="Track not found")
 
@@ -95,24 +132,48 @@ async def stream_proxy(track_id: str, request: Request):
 
     audio_url = track.get("audio_url")
     if not audio_url:
+        audio_url = await _lazy_resolve(playlist, idx, track)
+    if not audio_url:
         raise HTTPException(status_code=404, detail="No audio source")
 
     forward_headers = {}
     if request.headers.get("range"):
         forward_headers["Range"] = request.headers["range"]
 
-    stream_req = _client.build_request("GET", audio_url, headers=forward_headers)
+    try:
+        cm = _client.stream("GET", audio_url, headers=forward_headers)
+        upstream = await cm.__aenter__()
+    except Exception as exc:
+        logger.warning("upstream connect failed for %s: %s", audio_url, exc)
+        raise HTTPException(status_code=502, detail="Upstream unavailable")
 
-    head = await _client.send(_client.build_request("HEAD", audio_url))
-    if head.status_code in (404, 403):
-        raise HTTPException(status_code=404, detail="Audio source unavailable")
+    if upstream.status_code not in (200, 206):
+        try:
+            await cm.__aexit__(None, None, None)
+        except Exception:
+            pass
+        raise HTTPException(status_code=502, detail=f"Upstream returned {upstream.status_code}")
 
     response_headers = {
-        k: v for k, v in head.headers.items() if k.lower() in PASS_THROUGH_HEADERS
+        k: v for k, v in upstream.headers.items() if k.lower() in PASS_THROUGH_HEADERS
     }
+    if "content-type" not in response_headers:
+        response_headers["content-type"] = "audio/mpeg"
+
+    async def gen():
+        try:
+            async for chunk in upstream.aiter_bytes():
+                yield chunk
+        except Exception as exc:
+            logger.warning("upstream stream dropped for %s: %s", audio_url, exc)
+        finally:
+            try:
+                await cm.__aexit__(None, None, None)
+            except Exception:
+                pass
 
     return StreamingResponse(
-        remote_stream(stream_req),
+        gen(),
         status_code=200,
         headers=response_headers,
         media_type=response_headers.get("content-type", "audio/mpeg"),

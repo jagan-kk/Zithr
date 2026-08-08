@@ -14,8 +14,8 @@ class Track(BaseModel):
     duration: str = "3:00"
     spotify_uri: Optional[str] = None
     file_id: Optional[str] = None
-    resolved_source: str = "Free Archive Audio"
-    audio_url: str = "https://download.samplelib.com/mp3/sample-3s.mp3"
-    file_size: str = "3.5 MB"
-    status: str = "cached"
-    bitrate: str = "320kbps"
+    resolved_source: str = "Internet Archive"
+    audio_url: str = ""
+    file_size: str = ""
+    status: str = "pending"
+    bitrate: str = ""

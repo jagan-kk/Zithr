@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { createApiKey, getApiKeys } from "../api/client";
+import { createApiKey, deleteApiKey, getApiKeys } from "../api/client";
 
 const FALLBACK_KEYS = [
   {
@@ -18,8 +18,6 @@ const FALLBACK_KEYS = [
 
 export function useApiKeys() {
   const [apiKeys, setApiKeys] = useState(FALLBACK_KEYS);
-  const [newKeyName, setNewKeyName] = useState("");
-  const [copiedKeyId, setCopiedKeyId] = useState(null);
 
   const loadKeys = useCallback(async () => {
     try {
@@ -34,32 +32,36 @@ export function useApiKeys() {
     loadKeys();
   }, [loadKeys]);
 
-  const addKey = useCallback(
-    async (e) => {
-      e.preventDefault();
-      try {
-        const key = await createApiKey(newKeyName || "New Project Key");
-        setApiKeys((prev) => [...prev, key]);
-        setNewKeyName("");
-      } catch (err) {
-        console.error("Create key failed:", err);
-      }
-    },
-    [newKeyName]
-  );
+  const addKey = useCallback(async (name) => {
+    try {
+      const key = await createApiKey(name || "New Project Key");
+      setApiKeys((prev) => [...prev, key]);
+      return key;
+    } catch (err) {
+      console.error("Create key failed:", err);
+      return null;
+    }
+  }, []);
 
-  const copyKey = useCallback((id, value) => {
-    navigator.clipboard?.writeText(value);
-    setCopiedKeyId(id);
-    setTimeout(() => setCopiedKeyId(null), 1500);
+  const copyKey = useCallback((key) => {
+    navigator.clipboard?.writeText(key);
+  }, []);
+
+  const revokeKey = useCallback(async (id) => {
+    try {
+      await deleteApiKey(id);
+      setApiKeys((prev) => prev.filter((k) => k.id !== id));
+      return true;
+    } catch (err) {
+      console.error("Revoke key failed:", err);
+      return false;
+    }
   }, []);
 
   return {
     apiKeys,
-    newKeyName,
-    setNewKeyName,
-    copiedKeyId,
     addKey,
     copyKey,
+    revokeKey,
   };
 }

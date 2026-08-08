@@ -1,9 +1,28 @@
-import { API_BASE } from "../config";
+import { streamUrlFor } from "../config";
+
+const FETCH_TIMEOUT_MS = 180_000;
 
 export async function fetchTrackAudio(track) {
-  const res = await fetch(`${API_BASE}/stream/proxy/${track.id}`);
-  if (!res.ok) throw new Error(`HTTP ${res.status}`);
-  return res.blob();
+  let lastErr;
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    try {
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
+      try {
+        const res = await fetch(streamUrlFor(track.id), {
+          signal: controller.signal,
+        });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        return await res.blob();
+      } finally {
+        clearTimeout(timer);
+      }
+    } catch (err) {
+      lastErr = err;
+      await new Promise((r) => setTimeout(r, 600 * (attempt + 1)));
+    }
+  }
+  throw lastErr;
 }
 
 export function formatBytes(bytes) {
