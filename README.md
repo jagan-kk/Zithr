@@ -136,12 +136,12 @@ The backend is a self-contained Docker image and MongoDB is already external
 1. **Backend on Render** (or Railway):
    - Push `backend/` to GitHub; create a **Web Service** → *Root directory* = `backend` (Render picks up the `Dockerfile`).
    - Env vars: `MONGO_URL` (Atlas URI), `DB_NAME`, `CORS_ORIGINS=*`, and `INIT_API_KEY` on first launch.
-   - You get `https://vinylcloud-api.onrender.com`. HTTPS is automatic.
+   - You get `https://vinylcloud.onrender.com`. HTTPS is automatic.
    - *Free-tier caveat:* Render sleeps after ~15 min idle, so the first request can be slow.
 
 2. **Frontend on Vercel**:
    - Build command `npm run build`, output dir `dist`.
-   - Env vars: `VITE_BACKEND_URL=https://vinylcloud-api.onrender.com`, `VITE_API_KEY=<your key>`.
+   - Env vars: `VITE_BACKEND_URL=https://vinylcloud.onrender.com`, `VITE_API_KEY=<your key>`.
 
 3. Generate a dedicated key for external apps in the **API Keys** tab and hand
    that out (not the app's own key). Revoke it there if you want to cut access.
