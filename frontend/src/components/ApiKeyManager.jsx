@@ -64,6 +64,11 @@ export default function ApiKeyManager({ apiKeys, copyKey, onAdd, onRevoke }) {
               <p className="text-xs text-[#a3978b] font-mono truncate">{k.key}</p>
             </div>
             <span className="text-xs text-[#6b635a]">{k.requests} reqs</span>
+            {k.name === "Default Web Embed Key" && (
+              <span className="text-[10px] uppercase tracking-wide text-[#6b635a] border border-[#3a332b] rounded px-1.5 py-0.5">
+                Protected
+              </span>
+            )}
             <button
               onClick={() => handleCopy(k)}
               className="p-1.5 rounded-full text-[#a3978b] hover:text-[#d4a373]"
@@ -75,14 +80,16 @@ export default function ApiKeyManager({ apiKeys, copyKey, onAdd, onRevoke }) {
                 <Copy size={15} />
               )}
             </button>
-            <button
-              onClick={() => handleRevoke(k)}
-              className="p-1.5 rounded-full text-[#a3978b] hover:text-red-500"
-              aria-label="Revoke key"
-              title="Revoke key"
-            >
-              <Trash2 size={15} />
-            </button>
+            {k.name !== "Default Web Embed Key" && (
+              <button
+                onClick={() => handleRevoke(k)}
+                className="p-1.5 rounded-full text-[#a3978b] hover:text-red-500"
+                aria-label="Revoke key"
+                title="Revoke key"
+              >
+                <Trash2 size={15} />
+              </button>
+            )}
           </li>
         ))}
       </ul>
