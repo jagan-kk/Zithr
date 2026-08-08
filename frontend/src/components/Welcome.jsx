@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { ChevronUp, Layers, Radio } from "lucide-react";
 
 function Stat({ label, value }) {
@@ -10,14 +10,8 @@ function Stat({ label, value }) {
   );
 }
 
-export default function Welcome({ playlists, idbTrackCount, idbStorageUsed, onExit }) {
-  const [visible, setVisible] = useState(false);
+export default function Welcome({ playlists, idbTrackCount, idbStorageUsed, idbQuota, onExit }) {
   const [leaving, setLeaving] = useState(false);
-
-  useEffect(() => {
-    const id = requestAnimationFrame(() => setVisible(true));
-    return () => cancelAnimationFrame(id);
-  }, []);
 
   const exit = () => {
     if (leaving) return;
@@ -30,16 +24,10 @@ export default function Welcome({ playlists, idbTrackCount, idbStorageUsed, onEx
     0
   );
 
-  const stage = leaving ? "exit" : visible ? "in" : "initial";
-
   return (
     <div
       className={`fixed inset-0 z-50 flex flex-col bg-[#141210] transition-transform duration-700 ease-in-out ${
-        stage === "exit"
-          ? "-translate-y-full"
-          : stage === "in"
-          ? "translate-y-0"
-          : "translate-y-full"
+        leaving ? "-translate-y-full" : "translate-y-0"
       }`}
     >
       <div className="pointer-events-none absolute inset-0 overflow-hidden">
@@ -82,6 +70,11 @@ export default function Welcome({ playlists, idbTrackCount, idbStorageUsed, onEx
         <Stat label="Tracks" value={totalTracks} />
         <div className="w-px h-8 bg-[#3a332b]" />
         <Stat label="Cached in this browser" value={`${idbTrackCount} · ${idbStorageUsed}`} />
+        <div className="w-px h-8 bg-[#3a332b]" />
+        <Stat
+          label="Max browser storage"
+          value={idbQuota || "estimating…"}
+        />
       </div>
 
       <p className="relative pb-6 text-center text-[11px] text-[#6b635a] inline-flex items-center justify-center gap-1">

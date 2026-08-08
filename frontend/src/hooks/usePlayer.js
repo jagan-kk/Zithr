@@ -1,6 +1,17 @@
 import { useCallback, useRef, useState } from "react";
 import { toast } from "sonner";
 
+function randomIndex(exclude, length) {
+  if (length <= 1) return 0;
+  let n = exclude;
+  let guard = 0;
+  while (n === exclude && guard < 20) {
+    n = Math.floor(Math.random() * length);
+    guard += 1;
+  }
+  return n === exclude ? (exclude + 1) % length : n;
+}
+
 export function usePlayer({ cacheTrack }) {
   const audioRef = useRef(null);
   const [currentTrack, setCurrentTrack] = useState(null);
@@ -10,13 +21,14 @@ export function usePlayer({ cacheTrack }) {
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
   const [volume, setVolume] = useState(0.8);
+  const [shuffle, setShuffle] = useState(false);
 
-  const playTrack = useCallback(
-    async (track, tracks = []) => {
+  const applyTrack = useCallback(
+    (track, tracks, index) => {
       const hasAudio = Boolean(track?.audio_url || track?.file_id);
       setCurrentTrack(track);
       setQueue(tracks);
-      setQueueIndex(tracks.findIndex((t) => t.id === track.id));
+      setQueueIndex(index);
       setIsPlaying(true);
       if (cacheTrack && hasAudio) cacheTrack(track);
       if (!hasAudio) {
@@ -30,6 +42,37 @@ export function usePlayer({ cacheTrack }) {
     },
     [cacheTrack]
   );
+
+  const playTrack = useCallback(
+    (track, tracks = []) => {
+      const index = tracks.findIndex((t) => t.id === track.id);
+      applyTrack(track, tracks, index >= 0 ? index : 0);
+    },
+    [applyTrack]
+  );
+
+  const playIndex = useCallback(
+    (i, tracks = queue) => {
+      if (!tracks.length) return;
+      const clamped = Math.max(0, Math.min(i, tracks.length - 1));
+      applyTrack(tracks[clamped], tracks, clamped);
+    },
+    [applyTrack, queue]
+  );
+
+  const playRandom = useCallback(
+    (tracks) => {
+      if (!tracks || tracks.length === 0) {
+        toast.info("This playlist has no tracks.");
+        return;
+      }
+      setShuffle(true);
+      playIndex(Math.floor(Math.random() * tracks.length), tracks);
+    },
+    [playIndex]
+  );
+
+  const toggleShuffle = useCallback(() => setShuffle((s) => !s), []);
 
   const togglePlay = useCallback(() => {
     if (!audioRef.current) return;
@@ -46,16 +89,30 @@ export function usePlayer({ cacheTrack }) {
 
   const skip = useCallback(
     (direction) => {
+      if (!queue.length) return;
       if (direction > 0) {
-        if (queueIndex + 1 < queue.length) {
-          playTrack(queue[queueIndex + 1], queue);
+        if (shuffle) {
+          playIndex(randomIndex(queueIndex, queue.length));
+        } else if (queueIndex + 1 < queue.length) {
+          playIndex(queueIndex + 1);
         }
       } else if (queueIndex - 1 >= 0) {
-        playTrack(queue[queueIndex - 1], queue);
+        playIndex(queueIndex - 1);
       }
     },
-    [queue, queueIndex, playTrack]
+    [queue, queueIndex, shuffle, playIndex]
   );
+
+  const onEnded = useCallback(() => {
+    if (!queue.length) return;
+    if (shuffle) {
+      playIndex(randomIndex(queueIndex, queue.length));
+    } else if (queueIndex + 1 < queue.length) {
+      playIndex(queueIndex + 1);
+    } else {
+      setIsPlaying(false);
+    }
+  }, [queue, queueIndex, shuffle, playIndex]);
 
   const onTimeUpdate = useCallback(
     () => setCurrentTime(audioRef.current?.currentTime || 0),
@@ -79,9 +136,14 @@ export function usePlayer({ cacheTrack }) {
     currentTime,
     duration,
     volume,
+    shuffle,
     playTrack,
+    playRandom,
+    playIndex,
     togglePlay,
+    toggleShuffle,
     skip,
+    onEnded,
     onTimeUpdate,
     onLoadedMetadata,
     setVolumeLevel,

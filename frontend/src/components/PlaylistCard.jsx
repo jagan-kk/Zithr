@@ -1,4 +1,4 @@
-import { Music, Play, Radio, Trash2 } from "lucide-react";
+import { Music, Play, Radio, Shuffle, Trash2 } from "lucide-react";
 
 function sourceLabel(source) {
   if (source === "spotify_csv_import") return "Spotify CSV Import";
@@ -12,6 +12,7 @@ export default function PlaylistCard({
   onSelect,
   onDelete,
   onAddToQueue,
+  onShuffle,
 }) {
   return (
     <div
@@ -25,6 +26,16 @@ export default function PlaylistCard({
       <div className="flex items-center justify-between mb-2">
         <h3 className="font-semibold text-[#e8dfd1] truncate">{playlist.title}</h3>
         <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition">
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              onShuffle();
+            }}
+            className="p-1.5 rounded-full text-[#a3978b] hover:text-[#d4a373]"
+            aria-label="Play random"
+          >
+            <Shuffle size={14} />
+          </button>
           <button
             onClick={(e) => {
               e.stopPropagation();

@@ -3,6 +3,7 @@ import {
   HardDrive,
   Pause,
   Play,
+  Shuffle,
   SkipBack,
   SkipForward,
   Volume2,
@@ -23,8 +24,11 @@ export default function PlayerBar({
   currentTime,
   duration,
   volume,
+  shuffle,
   togglePlay,
+  toggleShuffle,
   skip,
+  onEnded,
   onTimeUpdate,
   onLoadedMetadata,
   setVolumeLevel,
@@ -38,6 +42,7 @@ export default function PlayerBar({
       <audio
         ref={audioRef}
         src={streamUrl || ""}
+        onEnded={onEnded}
         onTimeUpdate={onTimeUpdate}
         onLoadedMetadata={onLoadedMetadata}
       />
@@ -75,6 +80,21 @@ export default function PlayerBar({
           aria-label="Next track"
         >
           <SkipForward size={18} />
+        </button>
+      </div>
+
+      <div className="flex items-center">
+        <button
+          onClick={toggleShuffle}
+          aria-label={shuffle ? "Shuffle on" : "Shuffle off"}
+          title="Shuffle"
+          className={`p-1.5 rounded-full ${
+            shuffle
+              ? "text-[#d4a373]"
+              : "text-[#6b635a] hover:text-[#a3978b]"
+          }`}
+        >
+          <Shuffle size={16} />
         </button>
       </div>
 

@@ -24,6 +24,9 @@ export function useLibrary() {
 
   const [idbTracks, setIdbTracks] = useState([]);
   const [idbStorageUsed, setIdbStorageUsed] = useState("0 B");
+  const [idbUsageBytes, setIdbUsageBytes] = useState(0);
+  const [idbQuota, setIdbQuota] = useState("");
+  const [idbQuotaBytes, setIdbQuotaBytes] = useState(0);
   const [isSyncingIDB, setIsSyncingIDB] = useState(false);
 
   const [isUploading, setIsUploading] = useState(false);
@@ -42,6 +45,18 @@ export function useLibrary() {
     setIdbTracks(all);
     const totalBytes = all.reduce((sum, t) => sum + (t.blobData?.size || 0), 0);
     setIdbStorageUsed(formatBytes(totalBytes));
+    setIdbUsageBytes(totalBytes);
+    try {
+      if (navigator.storage?.estimate) {
+        const est = await navigator.storage.estimate();
+        if (est?.quota) {
+          setIdbQuota(formatBytes(est.quota));
+          setIdbQuotaBytes(est.quota);
+        }
+      }
+    } catch (e) {
+      console.warn("Storage quota estimate failed:", e);
+    }
     return all;
   }, []);
 
@@ -291,6 +306,9 @@ export function useLibrary() {
     setActivePlaylistId,
     idbTracks,
     idbStorageUsed,
+    idbUsageBytes,
+    idbQuota,
+    idbQuotaBytes,
     isSyncingIDB,
     isUploading,
     uploadProgress,
