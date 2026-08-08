@@ -6,13 +6,14 @@ import PlaylistCard from "./components/PlaylistCard";
 import Sidebar from "./components/Sidebar";
 import SongUploader from "./components/SongUploader";
 import TrackList from "./components/TrackList";
+import Welcome from "./components/Welcome";
 import { useApiKeys } from "./hooks/useApiKeys";
 import { useLibrary } from "./hooks/useLibrary";
 import { usePlayer } from "./hooks/usePlayer";
 import { useState } from "react";
 
 export default function App() {
-  const [activeTab, setActiveTab] = useState("library");
+  const [activeTab, setActiveTab] = useState("welcome");
 
   const library = useLibrary();
   const player = usePlayer({ cacheTrack: library.cacheTrack });
@@ -187,6 +188,15 @@ export default function App() {
         onLoadedMetadata={player.onLoadedMetadata}
         setVolumeLevel={player.setVolumeLevel}
       />
+
+      {activeTab === "welcome" && (
+        <Welcome
+          playlists={library.playlists}
+          idbTrackCount={library.idbTracks.length}
+          idbStorageUsed={library.idbStorageUsed}
+          onExit={() => setActiveTab("stream")}
+        />
+      )}
     </div>
   );
 }

@@ -4,6 +4,7 @@ import {
   ArrowUp,
   Database,
   Disc,
+  Home,
   Key,
   Layers,
   Plus,
@@ -12,6 +13,7 @@ import {
 } from "lucide-react";
 
 const NAV = [
+  { id: "welcome", label: "Welcome", icon: Home },
   { id: "library", label: "Library", icon: Disc },
   { id: "stream", label: "Live Stream", icon: Radio },
   { id: "keys", label: "API Keys", icon: Key },
