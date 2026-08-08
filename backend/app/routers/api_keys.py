@@ -51,7 +51,13 @@ async def create_api_key(name: str = Form("New Project Key")):
 @router.delete("/{key_id}")
 async def delete_api_key(key_id: str):
     """Revoke an API key so it can no longer access playlists or streams."""
-    result = await api_keys_col.delete_one({"id": key_id})
-    if result.deleted_count == 0:
+    doc = await api_keys_col.find_one({"id": key_id})
+    if not doc:
         raise HTTPException(status_code=404, detail="API key not found")
+    if doc.get("name") == "Default Web Embed Key":
+        raise HTTPException(
+            status_code=409,
+            detail="Cannot revoke the app's own streaming key",
+        )
+    await api_keys_col.delete_one({"id": key_id})
     return {"status": "revoked", "deleted_id": key_id}
