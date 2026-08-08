@@ -1,4 +1,5 @@
-import { Database, Disc, Key, Layers, Radio } from "lucide-react";
+import { useState } from "react";
+import { Database, Disc, Key, Layers, Plus, Radio, X } from "lucide-react";
 
 const NAV = [
   { id: "library", label: "Library", icon: Disc },
@@ -14,7 +15,20 @@ export default function Sidebar({
   activePlaylistId,
   setActivePlaylistId,
   idbTracks,
+  onCreatePlaylist,
 }) {
+  const [creating, setCreating] = useState(false);
+  const [newName, setNewName] = useState("");
+
+  const submit = async (e) => {
+    e.preventDefault();
+    const res = await onCreatePlaylist?.(newName);
+    if (res) {
+      setNewName("");
+      setCreating(false);
+    }
+  };
+
   return (
     <aside className="w-64 shrink-0 border-r border-[#3a332b] h-screen overflow-y-auto sticky top-0 flex flex-col">
       <h1 className="flex items-center gap-2 text-lg font-bold text-[#d4a373] p-4">
@@ -38,9 +52,35 @@ export default function Sidebar({
       </nav>
 
       <div className="mt-6 px-3 flex-1">
-        <p className="px-3 text-xs uppercase tracking-wider text-[#6b635a] mb-2">
-          Your Playlists
-        </p>
+        <div className="flex items-center justify-between px-3 mb-2">
+          <p className="text-xs uppercase tracking-wider text-[#6b635a]">Your Playlists</p>
+          <button
+            onClick={() => setCreating((v) => !v)}
+            aria-label="New playlist"
+            className="text-[#a3978b] hover:text-[#d4a373]"
+          >
+            {creating ? <X size={14} /> : <Plus size={14} />}
+          </button>
+        </div>
+
+        {creating && (
+          <form onSubmit={submit} className="px-3 pb-2 flex items-center gap-2">
+            <input
+              autoFocus
+              value={newName}
+              onChange={(e) => setNewName(e.target.value)}
+              placeholder="Playlist name"
+              className="w-full rounded-lg bg-[#141210] border border-[#3a332b] px-2 py-1.5 text-sm text-[#e8dfd1] placeholder-[#6b635a] focus:outline-none focus:border-[#d4a373]"
+            />
+            <button
+              type="submit"
+              className="rounded-lg bg-[#d4a373] text-[#141210] text-xs font-semibold px-2 py-1.5"
+            >
+              Add
+            </button>
+          </form>
+        )}
+
         <div className="space-y-1">
           {playlists.map((pl) => (
             <button

@@ -7,6 +7,7 @@ import {
   SkipForward,
   Volume2,
 } from "lucide-react";
+import { streamUrlFor } from "../config";
 
 function formatTime(seconds) {
   if (!seconds || Number.isNaN(seconds)) return "0:00";
@@ -29,12 +30,14 @@ export default function PlayerBar({
   setVolumeLevel,
 }) {
   const progress = duration > 0 ? (currentTime / duration) * 100 : 0;
+  const trackId = currentTrack?.id;
+  const streamUrl = trackId ? streamUrlFor(trackId) : null;
 
   return (
     <div className="fixed bottom-0 inset-x-0 bg-[#1d1a16]/95 backdrop-blur border-t border-[#3a332b] p-3 flex items-center gap-4">
       <audio
         ref={audioRef}
-        src={currentTrack?.audio_url}
+        src={streamUrl || ""}
         onTimeUpdate={onTimeUpdate}
         onLoadedMetadata={onLoadedMetadata}
       />
@@ -101,7 +104,7 @@ export default function PlayerBar({
 
       {currentTrack && (
         <a
-          href={currentTrack.audio_url}
+          href={streamUrl || ""}
           target="_blank"
           rel="noreferrer"
           className="text-[#a3978b] hover:text-[#d4a373]"

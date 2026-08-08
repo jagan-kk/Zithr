@@ -1,14 +1,37 @@
 from contextlib import asynccontextmanager
+from datetime import datetime, timezone
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.core.config import settings
+from app.core.database import api_keys_col
+from app.models.api_key import ApiKeyItem
 from app.routers import api_keys, health, playlists, streaming
+
+
+async def _seed_initial_key() -> None:
+    """Bootstrap a first API key so a brand-new database is not locked out."""
+    if not settings.init_api_key:
+        return
+    if await api_keys_col.count_documents({}) > 0:
+        return
+    key = ApiKeyItem(
+        name="Default Web Embed Key",
+        key=settings.init_api_key,
+        created=datetime.now(timezone.utc).strftime("%Y-%m-%d"),
+        requests=0,
+        status="Active",
+    )
+    await api_keys_col.insert_one(key.model_dump())
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    try:
+        await _seed_initial_key()
+    except Exception:
+        pass
     yield
 
 

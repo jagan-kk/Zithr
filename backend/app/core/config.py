@@ -16,6 +16,7 @@ class Settings(BaseSettings):
     db_name: str = Field(alias="DB_NAME")
     cors_origins: str = "*"
     server_selection_timeout_ms: int = 3000
+    init_api_key: str | None = Field(default=None, alias="INIT_API_KEY")
 
     @property
     def cors_origin_list(self) -> list[str]:

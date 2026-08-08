@@ -1,7 +1,7 @@
 import { useState } from "react";
-import { Check, Copy, Key, Plus, Radio } from "lucide-react";
+import { Check, Copy, KeyRound, Plus, Radio, Trash2 } from "lucide-react";
 
-export default function ApiKeyManager({ apiKeys, copyKey, onAdd }) {
+export default function ApiKeyManager({ apiKeys, copyKey, onAdd, onRevoke }) {
   const [name, setName] = useState("");
   const [copiedId, setCopiedId] = useState(null);
 
@@ -18,11 +18,17 @@ export default function ApiKeyManager({ apiKeys, copyKey, onAdd }) {
     setName("");
   };
 
+  const handleRevoke = (k) => {
+    if (window.confirm(`Revoke the API key "${k.name}"? It will stop working immediately.`)) {
+      onRevoke(k.id);
+    }
+  };
+
   return (
     <div className="space-y-4">
       <div className="border border-[#3a332b] rounded-xl bg-[#1d1a16] p-5">
         <div className="flex items-center gap-2 mb-1">
-          <Key size={18} className="text-[#d4a373]" />
+          <KeyRound size={18} className="text-[#d4a373]" />
           <h3 className="font-semibold text-[#e8dfd1]">Streaming API Keys</h3>
         </div>
         <p className="text-xs text-[#6b635a] mb-4">
@@ -68,6 +74,14 @@ export default function ApiKeyManager({ apiKeys, copyKey, onAdd }) {
               ) : (
                 <Copy size={15} />
               )}
+            </button>
+            <button
+              onClick={() => handleRevoke(k)}
+              className="p-1.5 rounded-full text-[#a3978b] hover:text-red-500"
+              aria-label="Revoke key"
+              title="Revoke key"
+            >
+              <Trash2 size={15} />
             </button>
           </li>
         ))}

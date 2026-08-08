@@ -3,20 +3,48 @@ import io
 from pathlib import Path
 from typing import List, Optional
 
-from fastapi import APIRouter, File, Form, HTTPException, UploadFile
+from bson import ObjectId
+from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
+from pydantic import BaseModel
 
+from app.core.auth import require_api_key
 from app.core.database import fs_bucket, playlists_col
 from app.models.playlist import Playlist
 from app.models.track import Track
 from app.services.csv_importer import fallback_track, parse_csv_rows
 
-router = APIRouter(prefix="/playlists", tags=["playlists"])
+router = APIRouter(prefix="/playlists", tags=["playlists"], dependencies=[Depends(require_api_key)])
+
+
+class TrackDeleteRequest(BaseModel):
+    track_ids: List[str]
+
+
+class CreatePlaylistRequest(BaseModel):
+    name: str
 
 
 @router.get("", response_model=List[Playlist])
 async def get_playlists():
     playlists = await playlists_col.find({}, {"_id": 0}).to_list(100)
     return playlists
+
+
+@router.get("/{playlist_id}", response_model=Playlist)
+async def get_playlist(playlist_id: str):
+    playlist = await playlists_col.find_one({"id": playlist_id}, {"_id": 0})
+    if not playlist:
+        raise HTTPException(status_code=404, detail="Playlist not found")
+    return playlist
+
+
+@router.post("", response_model=Playlist)
+async def create_playlist(req: CreatePlaylistRequest):
+    """Create an empty playlist to upload songs into."""
+    title = req.name.strip() or "New Playlist"
+    new_playlist = Playlist(title=title, source="manual", track_count=0, tracks=[])
+    await playlists_col.insert_one(new_playlist.model_dump())
+    return new_playlist
 
 
 @router.post("/upload-csv", response_model=Playlist)
@@ -96,9 +124,51 @@ async def upload_track_files(
     return Playlist.model_validate(updated)
 
 
+@router.delete("/tracks")
+async def delete_tracks(payload: TrackDeleteRequest):
+    """Remove tracks (across all playlists) and free any GridFS storage."""
+    ids = set(payload.track_ids)
+    if not ids:
+        return {"deleted": 0}
+
+    deleted = 0
+    cursor = playlists_col.find({})
+    async for playlist in cursor:
+        remaining = []
+        changed = False
+        for t in playlist.get("tracks", []):
+            if t.get("id") in ids:
+                deleted += 1
+                changed = True
+                file_id = t.get("file_id")
+                if file_id and ObjectId.is_valid(file_id):
+                    try:
+                        await fs_bucket.delete(ObjectId(file_id))
+                    except Exception:
+                        pass
+            else:
+                remaining.append(t)
+        if changed:
+            await playlists_col.update_one(
+                {"_id": playlist["_id"]},
+                {"$set": {"tracks": remaining, "track_count": len(remaining)}},
+            )
+    return {"deleted": deleted}
+
+
 @router.delete("/{playlist_id}")
 async def delete_playlist(playlist_id: str):
-    res = await playlists_col.delete_one({"id": playlist_id})
-    if res.deleted_count == 0:
+    playlist = await playlists_col.find_one({"id": playlist_id})
+    if not playlist:
         raise HTTPException(status_code=404, detail="Playlist not found")
+
+    for t in playlist.get("tracks", []):
+        file_id = t.get("file_id")
+        if file_id and ObjectId.is_valid(file_id):
+            try:
+                await fs_bucket.delete(ObjectId(file_id))
+            except Exception:
+                pass
+
+    await playlists_col.delete_one({"_id": playlist["_id"]})
     return {"status": "success", "deleted_id": playlist_id}

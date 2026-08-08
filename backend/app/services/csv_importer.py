@@ -1,18 +1,9 @@
+import asyncio
 import uuid
 from typing import List
 
 from app.models.track import Track
-
-
-SAMPLE_AUDIO_URLS = [
-    "https://download.samplelib.com/mp3/sample-3s.mp3",
-    "https://download.samplelib.com/mp3/sample-6s.mp3",
-    "https://download.samplelib.com/mp3/sample-9s.mp3",
-]
-
-
-def resolve_audio_url(index: int) -> str:
-    return SAMPLE_AUDIO_URLS[index % len(SAMPLE_AUDIO_URLS)]
+from app.services.archive_resolver import resolve
 
 
 def build_track_from_row(row, index: int) -> Track:
@@ -25,13 +16,7 @@ def build_track_from_row(row, index: int) -> Track:
         title=title if title else "Untitled Track",
         artist=artist if artist else "Unknown Artist",
         album=album if album else "Imported Album",
-        duration="3:15",
         spotify_uri=uri,
-        resolved_source="Free Archive Resolver (100% Free)",
-        audio_url=resolve_audio_url(index),
-        file_size="3.8 MB",
-        status="cached",
-        bitrate="320kbps",
     )
 
 
@@ -40,8 +25,6 @@ def fallback_track() -> Track:
         title="Imported CSV Song 1",
         artist="Spotify Artist",
         album="CSV Playlist",
-        duration="3:00",
-        audio_url=SAMPLE_AUDIO_URLS[0],
     )
 
 
@@ -60,4 +43,27 @@ def parse_csv_rows(rows: List[List[str]]) -> List[Track]:
             continue
         tracks.append(build_track_from_row(row, len(tracks)))
 
+    return tracks
+
+
+async def resolve_tracks(tracks: List[Track], concurrency: int = 10) -> List[Track]:
+    """Resolve real Internet Archive audio URLs for every imported track."""
+    sem = asyncio.Semaphore(concurrency)
+
+    async def _one(track: Track) -> None:
+        if not track.artist or track.artist == "Unknown Artist":
+            track.status = "pending"
+            return
+        async with sem:
+            result = await resolve(track.title, track.artist)
+        if result:
+            track.audio_url = result["audio_url"]
+            track.resolved_source = result["resolved_source"]
+            track.file_size = result["file_size"]
+            track.duration = result["duration"]
+            track.status = result["status"]
+        else:
+            track.status = "pending"
+
+    await asyncio.gather(*(_one(t) for t in tracks))
     return tracks

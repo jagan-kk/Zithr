@@ -2,12 +2,17 @@ import uuid
 from datetime import datetime, timezone
 from typing import List
 
-from fastapi import APIRouter, Form
+from fastapi import APIRouter, Depends, Form, HTTPException
 
+from app.core.auth import require_api_key
 from app.core.database import api_keys_col
 from app.models.api_key import ApiKeyItem
 
-router = APIRouter(prefix="/api-keys", tags=["api-keys"])
+router = APIRouter(
+    prefix="/api-keys",
+    tags=["api-keys"],
+    dependencies=[Depends(require_api_key)],
+)
 
 
 def _generate_key() -> str:
@@ -22,7 +27,7 @@ async def get_api_keys():
             name="Default Web Embed Key",
             key=_generate_key(),
             created=datetime.now(timezone.utc).strftime("%Y-%m-%d"),
-            requests=1420,
+            requests=0,
             status="Active",
         )
         await api_keys_col.insert_one(default_key.model_dump())
@@ -41,3 +46,12 @@ async def create_api_key(name: str = Form("New Project Key")):
     )
     await api_keys_col.insert_one(new_key.model_dump())
     return new_key
+
+
+@router.delete("/{key_id}")
+async def delete_api_key(key_id: str):
+    """Revoke an API key so it can no longer access playlists or streams."""
+    result = await api_keys_col.delete_one({"id": key_id})
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="API key not found")
+    return {"status": "revoked", "deleted_id": key_id}
