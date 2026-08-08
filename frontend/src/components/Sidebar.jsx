@@ -1,5 +1,15 @@
 import { useState } from "react";
-import { Database, Disc, Key, Layers, Plus, Radio, X } from "lucide-react";
+import {
+  ArrowDown,
+  ArrowUp,
+  Database,
+  Disc,
+  Key,
+  Layers,
+  Plus,
+  Radio,
+  X,
+} from "lucide-react";
 
 const NAV = [
   { id: "library", label: "Library", icon: Disc },
@@ -16,6 +26,7 @@ export default function Sidebar({
   setActivePlaylistId,
   idbTracks,
   onCreatePlaylist,
+  onMovePlaylist,
 }) {
   const [creating, setCreating] = useState(false);
   const [newName, setNewName] = useState("");
@@ -82,22 +93,50 @@ export default function Sidebar({
         )}
 
         <div className="space-y-1">
-          {playlists.map((pl) => (
-            <button
+          {playlists.map((pl, i) => (
+            <div
               key={pl.id}
-              onClick={() => {
-                setActivePlaylistId(pl.id);
-                setActiveTab("library");
-              }}
-              className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-left text-sm ${
+              className={`group flex items-center rounded-lg pr-1 ${
                 activePlaylistId === pl.id
-                  ? "bg-[#d4a373]/15 text-[#e8dfd1]"
-                  : "text-[#a3978b] hover:bg-[#1d1a16]"
+                  ? "bg-[#d4a373]/15"
+                  : "hover:bg-[#1d1a16]"
               }`}
             >
-              <span className="truncate">{pl.title}</span>
-              <span className="text-xs text-[#6b635a]">{pl.track_count}</span>
-            </button>
+              <button
+                onClick={() => {
+                  setActivePlaylistId(pl.id);
+                  setActiveTab("library");
+                }}
+                className={`flex-1 min-w-0 flex items-center justify-between px-3 py-2 rounded-lg text-left text-sm ${
+                  activePlaylistId === pl.id
+                    ? "text-[#e8dfd1]"
+                    : "text-[#a3978b]"
+                }`}
+              >
+                <span className="truncate">{pl.title}</span>
+                <span className="text-xs text-[#6b635a]">{pl.track_count}</span>
+              </button>
+              <span className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
+                <button
+                  onClick={() => onMovePlaylist?.(pl.id, "up")}
+                  disabled={i === 0}
+                  aria-label={`Move ${pl.title} up`}
+                  title="Move up"
+                  className="p-1 rounded text-[#6b635a] hover:text-[#d4a373] disabled:opacity-30 disabled:hover:text-[#6b635a]"
+                >
+                  <ArrowUp size={13} />
+                </button>
+                <button
+                  onClick={() => onMovePlaylist?.(pl.id, "down")}
+                  disabled={i === playlists.length - 1}
+                  aria-label={`Move ${pl.title} down`}
+                  title="Move down"
+                  className="p-1 rounded text-[#6b635a] hover:text-[#d4a373] disabled:opacity-30 disabled:hover:text-[#6b635a]"
+                >
+                  <ArrowDown size={13} />
+                </button>
+              </span>
+            </div>
           ))}
         </div>
       </div>

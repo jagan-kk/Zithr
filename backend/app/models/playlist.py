@@ -1,6 +1,6 @@
 import uuid
 from datetime import datetime, timezone
-from typing import List
+from typing import List, Optional
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -17,4 +17,5 @@ class Playlist(BaseModel):
     created_at: str = Field(
         default_factory=lambda: datetime.now(timezone.utc).isoformat()
     )
+    position: Optional[int] = None
     tracks: List[Track] = []
