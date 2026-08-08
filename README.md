@@ -1,4 +1,4 @@
-# VinylCloud — Live Streamer & Browser Caching
+# VinylCloud — Live Streamer & Browser Caching https://vinylcloud-git-main-jagan-kks-projects.vercel.app/
 
 A music streaming platform: import Spotify playlists via CSV, resolve each track
 to a free stream, cache audio into the browser via IndexedDB, and expose the
