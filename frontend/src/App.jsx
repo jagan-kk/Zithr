@@ -5,14 +5,16 @@ import PlayerBar from "./components/PlayerBar";
 import PlaylistCard from "./components/PlaylistCard";
 import Sidebar from "./components/Sidebar";
 import SongUploader from "./components/SongUploader";
+import StorageMeter from "./components/StorageMeter";
 import TrackList from "./components/TrackList";
+import Welcome from "./components/Welcome";
 import { useApiKeys } from "./hooks/useApiKeys";
 import { useLibrary } from "./hooks/useLibrary";
 import { usePlayer } from "./hooks/usePlayer";
 import { useState } from "react";
 
 export default function App() {
-  const [activeTab, setActiveTab] = useState("library");
+  const [activeTab, setActiveTab] = useState("welcome");
 
   const library = useLibrary();
   const player = usePlayer({ cacheTrack: library.cacheTrack });
@@ -61,6 +63,7 @@ export default function App() {
                   onAddToQueue={() =>
                     player.playTrack(pl.tracks[0], pl.tracks)
                   }
+                  onShuffle={() => player.playRandom(pl.tracks)}
                   onDelete={() => library.removePlaylist(pl.id)}
                 />
               ))}
@@ -162,6 +165,10 @@ export default function App() {
                 </p>
               </div>
             </div>
+            <StorageMeter
+              usedBytes={library.idbUsageBytes}
+              quotaBytes={library.idbQuotaBytes}
+            />
             <TrackList
               tracks={library.idbTracks}
               currentTrack={player.currentTrack}
@@ -181,12 +188,25 @@ export default function App() {
         currentTime={player.currentTime}
         duration={player.duration}
         volume={player.volume}
+        shuffle={player.shuffle}
         togglePlay={player.togglePlay}
+        toggleShuffle={player.toggleShuffle}
         skip={player.skip}
+        onEnded={player.onEnded}
         onTimeUpdate={player.onTimeUpdate}
         onLoadedMetadata={player.onLoadedMetadata}
         setVolumeLevel={player.setVolumeLevel}
       />
+
+      {activeTab === "welcome" && (
+        <Welcome
+          playlists={library.playlists}
+          idbTrackCount={library.idbTracks.length}
+          idbStorageUsed={library.idbStorageUsed}
+          idbQuota={library.idbQuota}
+          onExit={() => setActiveTab("stream")}
+        />
+      )}
     </div>
   );
 }
