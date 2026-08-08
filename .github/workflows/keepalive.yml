@@ -1,0 +1,27 @@
+name: Render keep-alive
+
+on:
+  schedule:
+    # Every 10 minutes: keeps the Render free web service from spinning down
+    # after its ~15 min idle timeout, and pings MongoDB via /api/status.
+    - cron: "*/10 * * * *"
+  workflow_dispatch: {}
+
+jobs:
+  ping:
+    name: Ping API status
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Ping status endpoint
+        env:
+          URL: ${{ vars.KEEPALIVE_URL }}
+        run: |
+          if [ -z "$URL" ]; then
+            echo "KEEPALIVE_URL repo variable is not set; skipping."
+            exit 0
+          fi
+          curl -fso /dev/null --max-time 30 "$URL" \
+            || { echo "Ping failed (service may be asleep or unreachable)"; exit 0; }
+          echo "Alive."
