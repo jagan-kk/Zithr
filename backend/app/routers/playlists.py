@@ -24,10 +24,38 @@ class CreatePlaylistRequest(BaseModel):
     name: str
 
 
+class ReorderRequest(BaseModel):
+    ids: List[str]
+
+
+async def _next_position() -> int:
+    count = await playlists_col.count_documents({})
+    return count
+
+
 @router.get("", response_model=List[Playlist])
 async def get_playlists():
-    playlists = await playlists_col.find({}, {"_id": 0}).to_list(100)
+    playlists = await playlists_col.find({}, {"_id": 0}).to_list(200)
+    playlists.sort(
+        key=lambda p: (
+            p.get("position") if isinstance(p.get("position"), int) else 10**9,
+            p.get("created_at", ""),
+        )
+    )
     return playlists
+
+
+@router.post("/reorder")
+async def reorder_playlists(req: ReorderRequest):
+    """Persist a full playlist ordering (id at index i becomes position i)."""
+    if not req.ids:
+        return {"status": "ok", "reordered": 0}
+    for i, playlist_id in enumerate(req.ids):
+        await playlists_col.update_one(
+            {"id": playlist_id},
+            {"$set": {"position": i}},
+        )
+    return {"status": "ok", "reordered": len(req.ids)}
 
 
 @router.get("/{playlist_id}", response_model=Playlist)
@@ -42,7 +70,9 @@ async def get_playlist(playlist_id: str):
 async def create_playlist(req: CreatePlaylistRequest):
     """Create an empty playlist to upload songs into."""
     title = req.name.strip() or "New Playlist"
-    new_playlist = Playlist(title=title, source="manual", track_count=0, tracks=[])
+    new_playlist = Playlist(
+        title=title, source="manual", track_count=0, position=await _next_position(), tracks=[]
+    )
     await playlists_col.insert_one(new_playlist.model_dump())
     return new_playlist
 
@@ -64,6 +94,7 @@ async def upload_csv(
         title=playlist_name if playlist_name else file.filename.replace(".csv", ""),
         source="spotify_csv_import",
         track_count=len(tracks),
+        position=await _next_position(),
         tracks=tracks,
     )
 

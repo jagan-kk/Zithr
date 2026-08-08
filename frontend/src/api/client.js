@@ -26,6 +26,9 @@ export const uploadSongFiles = (playlistId, files, artist, onProgress) => {
 export const deletePlaylist = (id) =>
   api.delete(`/playlists/${id}`).then((r) => r.data);
 
+export const reorderPlaylists = (ids) =>
+  api.post("/playlists/reorder", { ids }).then((r) => r.data);
+
 export const deleteTracks = (trackIds) =>
   api
     .delete("/playlists/tracks", { data: { track_ids: trackIds } })

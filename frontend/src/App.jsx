@@ -32,6 +32,7 @@ export default function App() {
         setActivePlaylistId={library.setActivePlaylistId}
         idbTracks={library.idbTracks}
         onCreatePlaylist={library.createPlaylist}
+        onMovePlaylist={library.movePlaylist}
       />
 
       <main className="flex-1 p-6 pb-32 overflow-auto">

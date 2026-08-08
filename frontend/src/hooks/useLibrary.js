@@ -5,6 +5,7 @@ import {
   deletePlaylist,
   deleteTracks as apiDeleteTracks,
   getPlaylists,
+  reorderPlaylists,
   uploadCsv,
   uploadSongFiles,
 } from "../api/client";
@@ -244,6 +245,26 @@ export function useLibrary() {
     [syncFromServer]
   );
 
+  const movePlaylist = useCallback(
+    async (id, direction) => {
+      const index = playlists.findIndex((p) => p.id === id);
+      if (index === -1) return;
+      const target = direction === "up" ? index - 1 : index + 1;
+      if (target < 0 || target >= playlists.length) return;
+      const reordered = [...playlists];
+      [reordered[index], reordered[target]] = [reordered[target], reordered[index]];
+      const previous = playlists;
+      setPlaylists(reordered);
+      try {
+        await reorderPlaylists(reordered.map((p) => p.id));
+      } catch (e) {
+        setPlaylists(previous);
+        console.error("Reorder failed:", e);
+      }
+    },
+    [playlists]
+  );
+
   const deleteTracks = useCallback(
     async (trackIds) => {
       if (!trackIds || trackIds.length === 0) return;
@@ -280,6 +301,7 @@ export function useLibrary() {
     uploadSongs,
     removePlaylist,
     createPlaylist,
+    movePlaylist,
     deleteTracks,
     cacheTrack,
     downloadTracks,
