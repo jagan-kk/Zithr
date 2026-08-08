@@ -15,7 +15,7 @@ class Settings(BaseSettings):
     mongo_url: str = Field(alias="MONGO_URL")
     db_name: str = Field(alias="DB_NAME")
     cors_origins: str = "*"
-    server_selection_timeout_ms: int = 3000
+    server_selection_timeout_ms: int = 10000
     init_api_key: str | None = Field(default=None, alias="INIT_API_KEY")
 
     @property
