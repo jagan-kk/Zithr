@@ -217,6 +217,7 @@ async def delete_audio(file_id: str) -> None:
         if is_b2_ref(file_id):
             client = _get_s3_client()
             if client is None:
+                await _enqueue_deletion(file_id)
                 return
             key = file_id[len(B2_ID_PREFIX):]
             try:
