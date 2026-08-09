@@ -17,9 +17,22 @@ router = APIRouter(prefix="/stream", tags=["streaming"], dependencies=[Depends(r
 PASS_THROUGH_HEADERS = {"content-range", "content-length", "accept-ranges", "content-type"}
 CHUNK_SIZE = 256 * 1024
 
-# Long-lived client: stays open while the response body is being consumed,
-# so the stream isn't truncated when the request would otherwise close.
-_client = httpx.AsyncClient(timeout=httpx.Timeout(120.0, connect=10.0), follow_redirects=True)
+_proxy_client: httpx.AsyncClient | None = None
+
+
+def _get_proxy_client() -> httpx.AsyncClient:
+    """Return a lazily-initialised async httpx client for the proxy stream."""
+    global _proxy_client
+    if _proxy_client is None or _proxy_client.is_closed:
+        _proxy_client = httpx.AsyncClient(timeout=httpx.Timeout(120.0, connect=10.0), follow_redirects=True)
+    return _proxy_client
+
+
+async def close_proxy_client() -> None:
+    global _proxy_client
+    if _proxy_client is not None and not _proxy_client.is_closed:
+        await _proxy_client.aclose()
+        _proxy_client = None
 
 # In-memory lazy-resolution cache: track_id -> audio_url ("" = negative).
 _lazy_cache: dict = {}
@@ -133,7 +146,7 @@ async def stream_proxy(track_id: str, request: Request):
         forward_headers["Range"] = request.headers["range"]
 
     try:
-        cm = _client.stream("GET", audio_url, headers=forward_headers)
+        cm = _get_proxy_client().stream("GET", audio_url, headers=forward_headers)
         upstream = await cm.__aenter__()
     except Exception as exc:
         logger.warning("upstream connect failed for %s: %s", audio_url, exc)

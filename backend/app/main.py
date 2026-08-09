@@ -9,7 +9,9 @@ from app.core.config import settings
 from app.core.database import api_keys_col
 from app.models.api_key import ApiKeyItem
 from app.routers import api_keys, health, playlists, streaming
+from app.services.archive_resolver import close_client as close_archive_client
 from app.services.object_storage import retry_pending_deletions
+from app.routers.streaming import close_proxy_client
 
 
 async def _seed_initial_key() -> None:
@@ -39,6 +41,8 @@ async def lifespan(app: FastAPI):
     try:
         yield
     finally:
+        await close_archive_client()
+        await close_proxy_client()
         cleanup_task.cancel()
         try:
             await cleanup_task
