@@ -7,7 +7,7 @@ from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 from pydantic import BaseModel
 
 from app.core.auth import require_api_key
-from app.core.database import playlists_col
+import app.core.database as _dbmod
 from app.models.playlist import Playlist
 from app.models.track import Track
 from app.services.csv_importer import fallback_track, parse_csv_rows
@@ -29,13 +29,13 @@ class ReorderRequest(BaseModel):
 
 
 async def _next_position() -> int:
-    count = await playlists_col.count_documents({})
+    count = await _dbmod.playlists_col.count_documents({})
     return count
 
 
 @router.get("", response_model=List[Playlist])
 async def get_playlists():
-    playlists = await playlists_col.find({}, {"_id": 0}).to_list(200)
+    playlists = await _dbmod.playlists_col.find({}, {"_id": 0}).to_list(200)
     playlists.sort(
         key=lambda p: (
             p.get("position") if isinstance(p.get("position"), int) else 10**9,
@@ -51,7 +51,7 @@ async def reorder_playlists(req: ReorderRequest):
     if not req.ids:
         return {"status": "ok", "reordered": 0}
     for i, playlist_id in enumerate(req.ids):
-        await playlists_col.update_one(
+        await _dbmod.playlists_col.update_one(
             {"id": playlist_id},
             {"$set": {"position": i}},
         )
@@ -60,7 +60,7 @@ async def reorder_playlists(req: ReorderRequest):
 
 @router.get("/{playlist_id}", response_model=Playlist)
 async def get_playlist(playlist_id: str):
-    playlist = await playlists_col.find_one({"id": playlist_id}, {"_id": 0})
+    playlist = await _dbmod.playlists_col.find_one({"id": playlist_id}, {"_id": 0})
     if not playlist:
         raise HTTPException(status_code=404, detail="Playlist not found")
     return playlist
@@ -73,7 +73,7 @@ async def create_playlist(req: CreatePlaylistRequest):
     new_playlist = Playlist(
         title=title, source="manual", track_count=0, position=await _next_position(), tracks=[]
     )
-    await playlists_col.insert_one(new_playlist.model_dump())
+    await _dbmod.playlists_col.insert_one(new_playlist.model_dump())
     return new_playlist
 
 
@@ -98,7 +98,7 @@ async def upload_csv(
         tracks=tracks,
     )
 
-    await playlists_col.insert_one(new_playlist.model_dump())
+    await _dbmod.playlists_col.insert_one(new_playlist.model_dump())
     return new_playlist
 
 
@@ -112,7 +112,7 @@ async def upload_track_files(
     if not files:
         raise HTTPException(status_code=400, detail="No files provided")
 
-    playlist = await playlists_col.find_one({"id": playlist_id})
+    playlist = await _dbmod.playlists_col.find_one({"id": playlist_id})
     if not playlist:
         raise HTTPException(status_code=404, detail="Playlist not found")
 
@@ -140,7 +140,7 @@ async def upload_track_files(
             )
         )
 
-    await playlists_col.update_one(
+    await _dbmod.playlists_col.update_one(
         {"id": playlist_id},
         {
             "$push": {"tracks": {"$each": [t.model_dump() for t in tracks]}},
@@ -148,7 +148,7 @@ async def upload_track_files(
         },
     )
 
-    updated = await playlists_col.find_one({"id": playlist_id}, {"_id": 0})
+    updated = await _dbmod.playlists_col.find_one({"id": playlist_id}, {"_id": 0})
     return Playlist.model_validate(updated)
 
 
@@ -160,7 +160,7 @@ async def delete_tracks(payload: TrackDeleteRequest):
         return {"deleted": 0}
 
     deleted = 0
-    cursor = playlists_col.find({})
+    cursor = _dbmod.playlists_col.find({})
     async for playlist in cursor:
         remaining = []
         changed = False
@@ -174,7 +174,7 @@ async def delete_tracks(payload: TrackDeleteRequest):
             else:
                 remaining.append(t)
         if changed:
-            await playlists_col.update_one(
+            await _dbmod.playlists_col.update_one(
                 {"_id": playlist["_id"]},
                 {"$set": {"tracks": remaining, "track_count": len(remaining)}},
             )
@@ -183,7 +183,7 @@ async def delete_tracks(payload: TrackDeleteRequest):
 
 @router.delete("/{playlist_id}")
 async def delete_playlist(playlist_id: str):
-    playlist = await playlists_col.find_one({"id": playlist_id})
+    playlist = await _dbmod.playlists_col.find_one({"id": playlist_id})
     if not playlist:
         raise HTTPException(status_code=404, detail="Playlist not found")
 
@@ -192,5 +192,5 @@ async def delete_playlist(playlist_id: str):
         if file_id:
             await delete_audio(file_id)
 
-    await playlists_col.delete_one({"_id": playlist["_id"]})
+    await _dbmod.playlists_col.delete_one({"_id": playlist["_id"]})
     return {"status": "success", "deleted_id": playlist_id}

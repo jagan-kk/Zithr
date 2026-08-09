@@ -20,7 +20,7 @@ from bson import ObjectId
 from botocore.exceptions import BotoCoreError, ClientError
 
 from app.core.config import settings
-from app.core.database import fs_bucket, fs_files_col, pending_deletions_col
+import app.core.database as _dbmod
 
 logger = logging.getLogger(__name__)
 
@@ -87,7 +87,7 @@ def is_b2_ref(file_id: Optional[str]) -> bool:
 async def _enqueue_deletion(file_id: str) -> None:
     """Best-effort persist a B2 key that still needs deleting for later retries."""
     try:
-        await pending_deletions_col.update_one(
+        await _dbmod.pending_deletions_col.update_one(
             {"file_id": file_id},
             {
                 "$setOnInsert": {
@@ -129,7 +129,7 @@ async def store_audio(filename: str, data: bytes, content_type: str) -> dict:
             # so retain it and schedule a compensating cleanup.
             await _enqueue_deletion(f"{B2_ID_PREFIX}{key}")
 
-    grid_id = await fs_bucket.upload_from_stream(
+    grid_id = await _dbmod.fs_bucket.upload_from_stream(
         filename or "song",
         io.BytesIO(data),
         metadata={"content_type": content_type, "filename": filename or "song"},
@@ -156,7 +156,7 @@ async def file_size_and_type(file_id: str) -> tuple[int, str]:
             resp.get("ContentType") or "audio/mpeg",
         )
 
-    meta = await fs_files_col.find_one({"_id": ObjectId(file_id)})
+    meta = await _dbmod.fs_files_col.find_one({"_id": ObjectId(file_id)})
     if not meta:
         raise FileNotFoundError(file_id)
     return meta.get("length", 0), meta.get("metadata", {}).get("content_type") or "audio/mpeg"
@@ -188,7 +188,7 @@ async def open_audio(file_id: str, start: int, end_excl: int):
         return _B2Body(resp["Body"], remaining)
 
     try:
-        grid_files = await fs_bucket.open_download_stream(ObjectId(file_id))
+        grid_files = await _dbmod.fs_bucket.open_download_stream(ObjectId(file_id))
     except Exception as exc:
         logger.warning("GridFS open failed for %s: %s", file_id, exc)
         raise FileNotFoundError(file_id) from exc
@@ -237,7 +237,7 @@ async def delete_audio(file_id: str) -> None:
                 logger.debug("B2 delete failed for %s: %s", file_id, exc)
                 await _enqueue_deletion(file_id)
         elif ObjectId.is_valid(file_id):
-            await fs_bucket.delete(ObjectId(file_id))
+            await _dbmod.fs_bucket.delete(ObjectId(file_id))
     except Exception as exc:
         logger.warning("delete_audio failed for %s: %s", file_id, exc)
 
@@ -251,7 +251,7 @@ async def retry_pending_deletions(batch_size: int = B2_RETRY_BATCH_SIZE) -> None
     client = _get_s3_client()
     if client is None:
         return
-    cursor = pending_deletions_col.find({}).limit(batch_size)
+    cursor = _dbmod.pending_deletions_col.find({}).limit(batch_size)
     async for doc in cursor:
         file_id = doc.get("file_id")
         if not file_id:
@@ -276,7 +276,7 @@ async def retry_pending_deletions(batch_size: int = B2_RETRY_BATCH_SIZE) -> None
         except BotoCoreError as exc:
             logger.warning("retry pending delete failed for %s: %s", file_id, exc)
             continue
-        await pending_deletions_col.delete_one({"_id": doc["_id"]})
+        await _dbmod.pending_deletions_col.delete_one({"_id": doc["_id"]})
 
 
 def _make_object_key(filename: str) -> str:

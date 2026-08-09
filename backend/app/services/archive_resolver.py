@@ -12,7 +12,21 @@ TIMEOUT = httpx.Timeout(25.0, connect=10.0)
 RETRIES = 2
 AUDIO_EXTS = (".mp3", ".ogg", ".flac", ".m4a")
 
-_client = httpx.AsyncClient(timeout=TIMEOUT, follow_redirects=True)
+_client: httpx.AsyncClient | None = None
+
+
+def _get_client() -> httpx.AsyncClient:
+    global _client
+    if _client is None or _client.is_closed:
+        _client = httpx.AsyncClient(timeout=TIMEOUT, follow_redirects=True)
+    return _client
+
+
+async def close_client() -> None:
+    global _client
+    if _client is not None and not _client.is_closed:
+        await _client.aclose()
+        _client = None
 
 
 def _normalize(text: str) -> str:
@@ -42,7 +56,7 @@ def _score(title: str, artist: str, doc: dict) -> float:
 
 async def _search(title: str, artist: str) -> list:
     async def query(q: str) -> list:
-        r = await _client.get(
+        r = await _get_client().get(
             ARCHIVE_SEARCH_URL,
             params={
                 "q": q,
@@ -66,7 +80,7 @@ async def _search(title: str, artist: str) -> list:
 
 
 async def _pick_audio_file(identifier: str) -> str | None:
-    r = await _client.get(
+    r = await _get_client().get(
         ARCHIVE_METADATA_URL.format(identifier=identifier),
         timeout=httpx.Timeout(10.0, connect=8.0),
     )
@@ -106,7 +120,7 @@ async def _pick_audio_file(identifier: str) -> str | None:
 async def _validate_audio(url: str) -> bool:
     """Quick range request to confirm the file actually streams."""
     try:
-        cm = _client.stream(
+        cm = _get_client().stream(
             "GET",
             url,
             headers={"Range": "bytes=0-1023"},
