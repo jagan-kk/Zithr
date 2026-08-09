@@ -26,6 +26,8 @@ logger = logging.getLogger(__name__)
 
 B2_ID_PREFIX = "b2:"
 CHUNK_SIZE = 256 * 1024
+B2_RETRY_BATCH_SIZE = 20
+B2_DELETE_TIMEOUT = 30.0
 
 
 class _B2Body:
@@ -240,23 +242,33 @@ async def delete_audio(file_id: str) -> None:
         logger.warning("delete_audio failed for %s: %s", file_id, exc)
 
 
-async def retry_pending_deletions() -> None:
-    """Best-effort cleanup of deferred B2 deletions recorded in Mongo."""
+async def retry_pending_deletions(batch_size: int = B2_RETRY_BATCH_SIZE) -> None:
+    """Best-effort cleanup of deferred B2 deletions recorded in Mongo.
+
+    Processes only a bounded batch per call, timing out each delete operation;
+    successes are removed, failures stay queued for the next pass.
+    """
     client = _get_s3_client()
     if client is None:
         return
-    cursor = pending_deletions_col.find({})
+    cursor = pending_deletions_col.find({}).limit(batch_size)
     async for doc in cursor:
         file_id = doc.get("file_id")
         if not file_id:
             continue
         key = file_id[len(B2_ID_PREFIX):] if is_b2_ref(file_id) else file_id
         try:
-            await asyncio.to_thread(
-                client.delete_object,
-                Bucket=settings.backblaze_bucket,
-                Key=key,
+            await asyncio.wait_for(
+                asyncio.to_thread(
+                    client.delete_object,
+                    Bucket=settings.backblaze_bucket,
+                    Key=key,
+                ),
+                timeout=B2_DELETE_TIMEOUT,
             )
+        except asyncio.TimeoutError:
+            logger.warning("retry pending delete timed out for %s", file_id)
+            continue
         except ClientError as exc:
             if exc.response.get("ResponseMetadata", {}).get("HTTPStatusCode") != 404:
                 logger.warning("retry pending delete failed for %s: %s", file_id, exc)
