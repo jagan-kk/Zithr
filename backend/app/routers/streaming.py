@@ -1,14 +1,14 @@
 import asyncio
 import logging
 
-from bson import ObjectId
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import StreamingResponse
 import httpx
 
 from app.core.auth import require_api_key
-from app.core.database import fs_bucket, fs_files_col, playlists_col
+from app.core.database import playlists_col
 from app.services.archive_resolver import resolve as resolve_archive
+from app.services.object_storage import file_size_and_type, stream_audio
 
 logger = logging.getLogger(__name__)
 
@@ -68,31 +68,18 @@ async def _lazy_resolve(playlist: dict, idx: int, track: dict) -> str:
     return url
 
 
-async def grid_stream(file_obj: ObjectId, start: int, end_excl: int):
-    """Yield bytes from a user-uploaded file stored in GridFS."""
-    grid_in = await fs_bucket.open_download_stream(file_obj)
-    grid_in.seek(start)
-    remaining = end_excl - start
-    while remaining > 0:
-        chunk = await grid_in.read(min(CHUNK_SIZE, remaining))
-        if not chunk:
-            break
-        remaining -= len(chunk)
-        yield chunk
-
-
-@router.get("/file/{file_id}")
 async def serve_uploaded_file(file_id: str, request: Request):
-    """Serve a locally uploaded audio file with Range support."""
-    if not ObjectId.is_valid(file_id):
+    """Serve a locally uploaded audio file (B2 or GridFS) with Range support."""
+    if not file_id:
         raise HTTPException(status_code=404, detail="Invalid file id")
 
-    meta = await fs_files_col.find_one({"_id": ObjectId(file_id)})
-    if not meta:
+    try:
+        total, content_type = await file_size_and_type(file_id)
+    except FileNotFoundError:
+        raise HTTPException(status_code=404, detail="File not found")
+    except Exception:
         raise HTTPException(status_code=404, detail="File not found")
 
-    total = meta.get("length", 0)
-    content_type = meta.get("content_type") or "audio/mpeg"
     start, end = 0, max(total - 1, 0)
     status_code = 200
     headers = {"content-type": content_type, "accept-ranges": "bytes"}
@@ -114,7 +101,7 @@ async def serve_uploaded_file(file_id: str, request: Request):
         headers["content-length"] = str(total)
 
     return StreamingResponse(
-        grid_stream(ObjectId(file_id), start, end + 1),
+        stream_audio(file_id, start, end + 1),
         status_code=status_code,
         headers=headers,
     )
@@ -126,7 +113,7 @@ async def stream_proxy(track_id: str, request: Request):
     if not track:
         raise HTTPException(status_code=404, detail="Track not found")
 
-    # User-uploaded songs are stored in GridFS.
+    # User-uploaded songs are stored in B2 or GridFS.
     if track.get("file_id"):
         return await serve_uploaded_file(track["file_id"], request)
 
