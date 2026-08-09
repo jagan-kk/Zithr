@@ -4,7 +4,7 @@ from typing import Optional
 
 from fastapi import Header, HTTPException, Query, status
 
-from app.core.database import api_keys_col
+import app.core.database as _dbmod
 
 
 def _safe_eq(a: str, b: str) -> bool:
@@ -33,13 +33,13 @@ async def require_api_key(
     if not candidate:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid or missing API key")
 
-    doc = await api_keys_col.find_one({"key": candidate})
+    doc = await _dbmod.api_keys_col.find_one({"key": candidate})
     if not doc or not _safe_eq(doc.get("key", ""), candidate) or doc.get("status", "Active") != "Active":
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid or missing API key")
 
     async def _increment_requests() -> None:
         try:
-            await api_keys_col.update_one({"_id": doc["_id"]}, {"$inc": {"requests": 1}})
+            await _dbmod.api_keys_col.update_one({"_id": doc["_id"]}, {"$inc": {"requests": 1}})
         except Exception:
             pass
 

@@ -6,7 +6,7 @@ from fastapi.responses import StreamingResponse
 import httpx
 
 from app.core.auth import require_api_key
-from app.core.database import playlists_col
+import app.core.database as _dbmod
 from app.services.archive_resolver import resolve as resolve_archive
 from app.services.object_storage import file_size_and_type, open_audio, stream_audio
 
@@ -40,7 +40,7 @@ _lazy_inflight: set = set()
 
 
 async def find_track(track_id: str) -> tuple[dict | None, int | None, dict | None]:
-    cursor = playlists_col.find({})
+    cursor = _dbmod.playlists_col.find({})
     async for playlist in cursor:
         tracks = playlist.get("tracks", [])
         for i, track in enumerate(tracks):
@@ -74,7 +74,7 @@ async def _lazy_resolve(playlist: dict, idx: int, track: dict) -> str:
         if result.get("duration"):
             track["duration"] = result["duration"]
         track["status"] = "cached"
-        await playlists_col.update_one(
+        await _dbmod.playlists_col.update_one(
             {"_id": playlist["_id"]},
             {"$set": {f"tracks.{idx}": track}},
         )
