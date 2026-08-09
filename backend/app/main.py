@@ -8,6 +8,7 @@ from app.core.config import settings
 from app.core.database import api_keys_col
 from app.models.api_key import ApiKeyItem
 from app.routers import api_keys, health, playlists, streaming
+from app.services.object_storage import retry_pending_deletions
 
 
 async def _seed_initial_key() -> None:
@@ -30,6 +31,10 @@ async def _seed_initial_key() -> None:
 async def lifespan(app: FastAPI):
     try:
         await _seed_initial_key()
+    except Exception:
+        pass
+    try:
+        await retry_pending_deletions()
     except Exception:
         pass
     yield

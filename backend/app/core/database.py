@@ -10,6 +10,7 @@ db = client[settings.db_name]
 
 playlists_col = db.playlists
 api_keys_col = db.api_keys
+pending_deletions_col = db.pending_deletions
 fs_bucket = AsyncIOMotorGridFSBucket(db)
 fs_files_col = db["fs.files"]
 

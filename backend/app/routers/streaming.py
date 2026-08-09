@@ -8,7 +8,7 @@ import httpx
 from app.core.auth import require_api_key
 from app.core.database import playlists_col
 from app.services.archive_resolver import resolve as resolve_archive
-from app.services.object_storage import file_size_and_type, stream_audio
+from app.services.object_storage import file_size_and_type, open_audio, stream_audio
 
 logger = logging.getLogger(__name__)
 
@@ -100,8 +100,13 @@ async def serve_uploaded_file(file_id: str, request: Request):
     else:
         headers["content-length"] = str(total)
 
+    try:
+        opened = await open_audio(file_id, start, end + 1)
+    except Exception:
+        raise HTTPException(status_code=404, detail="File not found")
+
     return StreamingResponse(
-        stream_audio(file_id, start, end + 1),
+        stream_audio(opened),
         status_code=status_code,
         headers=headers,
     )

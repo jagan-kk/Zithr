@@ -29,16 +29,14 @@ class Settings(BaseSettings):
             self.backblaze_key_id
             and self.backblaze_api_key
             and self.backblaze_bucket
-            and self.backblaze_endpoint
+            and self.backblaze_endpoint_url
         )
 
     @property
     def backblaze_endpoint_url(self) -> str | None:
-        if not self.backblaze_endpoint:
+        endpoint = (self.backblaze_endpoint or "").strip()
+        if not endpoint.startswith("https://"):
             return None
-        endpoint = self.backblaze_endpoint.strip()
-        if not endpoint.startswith(("http://", "https://")):
-            endpoint = f"https://{endpoint}"
         return endpoint.rstrip("/")
 
     @property
