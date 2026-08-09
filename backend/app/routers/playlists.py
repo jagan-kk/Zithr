@@ -3,15 +3,15 @@ import io
 from pathlib import Path
 from typing import List, Optional
 
-from bson import ObjectId
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 from pydantic import BaseModel
 
 from app.core.auth import require_api_key
-from app.core.database import fs_bucket, playlists_col
+from app.core.database import playlists_col
 from app.models.playlist import Playlist
 from app.models.track import Track
 from app.services.csv_importer import fallback_track, parse_csv_rows
+from app.services.object_storage import delete_audio, store_audio
 
 router = APIRouter(prefix="/playlists", tags=["playlists"], dependencies=[Depends(require_api_key)])
 
@@ -108,7 +108,7 @@ async def upload_track_files(
     files: List[UploadFile] = File(...),
     artist: Optional[str] = Form(None),
 ):
-    """Upload one or more audio files into an existing playlist (stored in GridFS)."""
+    """Upload one or more audio files into an existing playlist (B2 or GridFS)."""
     if not files:
         raise HTTPException(status_code=400, detail="No files provided")
 
@@ -122,11 +122,7 @@ async def upload_track_files(
         if not data:
             continue
         content_type = f.content_type or "audio/mpeg"
-        grid_id = await fs_bucket.upload_from_stream(
-            f.filename or "song",
-            io.BytesIO(data),
-            metadata={"content_type": content_type, "filename": f.filename or "song"},
-        )
+        stored = await store_audio(f.filename or "song", data, content_type)
         stem = Path(f.filename or "Untitled").stem or "Untitled"
         tracks.append(
             Track(
@@ -134,9 +130,10 @@ async def upload_track_files(
                 artist=artist or "Unknown Artist",
                 album="User Upload",
                 duration="",
-                resolved_source="User Upload (GridFS)",
-                audio_url=f"/api/stream/file/{grid_id}",
-                file_id=str(grid_id),
+                resolved_source=stored["resolved_source"],
+                audio_url=f"/api/stream/file/{stored['file_id']}",
+                file_id=stored["file_id"],
+                storage=stored["storage"],
                 file_size=f"{len(data) / 1048576:.1f} MB",
                 status="cached",
                 bitrate="128kbps",
@@ -157,7 +154,7 @@ async def upload_track_files(
 
 @router.delete("/tracks")
 async def delete_tracks(payload: TrackDeleteRequest):
-    """Remove tracks (across all playlists) and free any GridFS storage."""
+    """Remove tracks (across all playlists) and free their object storage."""
     ids = set(payload.track_ids)
     if not ids:
         return {"deleted": 0}
@@ -172,11 +169,8 @@ async def delete_tracks(payload: TrackDeleteRequest):
                 deleted += 1
                 changed = True
                 file_id = t.get("file_id")
-                if file_id and ObjectId.is_valid(file_id):
-                    try:
-                        await fs_bucket.delete(ObjectId(file_id))
-                    except Exception:
-                        pass
+                if file_id:
+                    await delete_audio(file_id)
             else:
                 remaining.append(t)
         if changed:
@@ -195,11 +189,8 @@ async def delete_playlist(playlist_id: str):
 
     for t in playlist.get("tracks", []):
         file_id = t.get("file_id")
-        if file_id and ObjectId.is_valid(file_id):
-            try:
-                await fs_bucket.delete(ObjectId(file_id))
-            except Exception:
-                pass
+        if file_id:
+            await delete_audio(file_id)
 
     await playlists_col.delete_one({"_id": playlist["_id"]})
     return {"status": "success", "deleted_id": playlist_id}

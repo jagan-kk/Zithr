@@ -14,6 +14,7 @@ class Track(BaseModel):
     duration: str = "3:00"
     spotify_uri: Optional[str] = None
     file_id: Optional[str] = None
+    storage: str = "gridfs"
     resolved_source: str = "Internet Archive"
     audio_url: str = ""
     file_size: str = ""

@@ -1,3 +1,4 @@
+import asyncio
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 
@@ -8,6 +9,7 @@ from app.core.config import settings
 from app.core.database import api_keys_col
 from app.models.api_key import ApiKeyItem
 from app.routers import api_keys, health, playlists, streaming
+from app.services.object_storage import retry_pending_deletions
 
 
 async def _seed_initial_key() -> None:
@@ -32,7 +34,24 @@ async def lifespan(app: FastAPI):
         await _seed_initial_key()
     except Exception:
         pass
-    yield
+
+    cleanup_task = asyncio.create_task(_run_pending_cleanup())
+    try:
+        yield
+    finally:
+        cleanup_task.cancel()
+        try:
+            await cleanup_task
+        except Exception:
+            pass
+
+
+async def _run_pending_cleanup() -> None:
+    """Best-effort deferred B2 cleanup in the background; never blocks startup."""
+    try:
+        await retry_pending_deletions()
+    except Exception:
+        pass
 
 
 app = FastAPI(
