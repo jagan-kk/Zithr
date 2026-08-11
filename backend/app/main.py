@@ -59,8 +59,8 @@ async def _run_pending_cleanup() -> None:
 
 
 app = FastAPI(
-    title="VinylCloud API",
-    description="VinylCloud & Live Streamer — playlist management, CSV import, streaming proxy and API keys.",
+    title="Zithr API",
+    description="Zithr & Live Streamer — playlist management, CSV import, streaming proxy and API keys.",
     version="1.0.0",
     lifespan=lifespan,
 )
@@ -74,7 +74,7 @@ app.include_router(health.router, prefix=api_router_prefix)
 
 @app.get("/", tags=["meta"])
 async def root():
-    return {"message": "VinylCloud & Live Streamer API is running"}
+    return {"message": "Zithr & Live Streamer API is running"}
 
 
 app.add_middleware(

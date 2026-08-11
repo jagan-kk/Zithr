@@ -45,7 +45,7 @@ export default function Sidebar({
   return (
     <aside className="w-64 shrink-0 border-r border-[#3a332b] h-screen overflow-y-auto sticky top-0 flex flex-col">
       <h1 className="flex items-center gap-2 text-lg font-bold text-[#d4a373] p-4">
-        <Layers size={20} /> VinylCloud
+        <Layers size={20} /> Zithr
       </h1>
 
       <nav className="px-3 space-y-1">

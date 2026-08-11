@@ -68,6 +68,26 @@ export default function App() {
                 />
               ))}
             </div>
+
+            {library.activePlaylist && (
+              <div className="border border-[#3a332b] rounded-xl bg-[#1d1a16] p-4">
+                <div className="flex items-center justify-between mb-2">
+                  <h3 className="font-semibold text-[#e8dfd1]">
+                    {library.activePlaylist.title}
+                  </h3>
+                </div>
+                <div className="max-h-[420px] overflow-y-auto pr-1">
+                  <TrackList
+                    tracks={library.activePlaylist.tracks}
+                    currentTrack={player.currentTrack}
+                    isPlaying={player.isPlaying}
+                    onPlay={player.playTrack}
+                    cachedMap={cachedMap}
+                    onDeleteSelected={library.deleteTracks}
+                  />
+                </div>
+              </div>
+            )}
           </section>
         )}
 
@@ -168,14 +188,6 @@ export default function App() {
             <StorageMeter
               usedBytes={library.idbUsageBytes}
               quotaBytes={library.idbQuotaBytes}
-            />
-            <TrackList
-              tracks={library.idbTracks}
-              currentTrack={player.currentTrack}
-              isPlaying={player.isPlaying}
-              onPlay={player.playTrack}
-              cachedMap={cachedMap}
-              onDeleteSelected={library.deleteTracks}
             />
           </section>
         )}

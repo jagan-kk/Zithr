@@ -1,4 +1,4 @@
-const DB_NAME = "VinylCloudDB";
+const DB_NAME = "ZithrDB";
 const STORE = "cached_tracks";
 
 const openIndexedDB = () =>
