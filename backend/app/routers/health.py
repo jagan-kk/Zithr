@@ -9,7 +9,7 @@ router = APIRouter(tags=["health"])
 async def status():
     db_ok = await ping()
     return {
-        "service": "vinylcloud-api",
+        "service": "zithr-api",
         "status": "ok" if db_ok else "degraded",
         "db": "connected" if db_ok else "unreachable",
     }

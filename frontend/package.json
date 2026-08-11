@@ -1,8 +1,8 @@
 {
-  "name": "vinylcloud-frontend",
+  "name": "zithr-frontend",
   "version": "1.0.0",
   "private": true,
-  "description": "VinylCloud browser streamer — playlist import, IndexedDB caching and live streaming UI.",
+  "description": "Zithr browser streamer — playlist import, IndexedDB caching and live streaming UI.",
   "type": "module",
   "dependencies": {
     "axios": "^1.7.9",

@@ -570,7 +570,7 @@ wheels = [
 ]
 
 [[package]]
-name = "vinylcloud-backend"
+name = "zithr-backend"
 version = "0.1.0"
 source = { virtual = "." }
 dependencies = [

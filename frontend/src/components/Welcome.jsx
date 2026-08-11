@@ -49,7 +49,7 @@ export default function Welcome({ playlists, idbTrackCount, idbStorageUsed, idbQ
 
       <div className="relative flex-1 flex flex-col items-center justify-center text-center px-6">
         <p className="inline-flex items-center gap-2 text-xs uppercase tracking-[0.3em] text-[#d4a373] mb-6">
-          <Layers size={15} /> VinylCloud
+          <Layers size={15} /> Zithr
         </p>
         <h1 className="text-5xl md:text-7xl font-black text-[#e8dfd1] leading-none max-w-4xl">
           Every song you love.
